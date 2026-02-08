@@ -1,0 +1,17 @@
+{
+  "name": "spotify-play-history",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

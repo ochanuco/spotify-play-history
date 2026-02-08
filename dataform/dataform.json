@@ -1,0 +1,6 @@
+{
+  "warehouse": "bigquery",
+  "defaultDatabase": "chanukott",
+  "defaultSchema": "spotify",
+  "assertionSchema": "dataform_assertions"
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spotify Play History"
+  short_description: "GCP+Terraform pipeline for Spotify play history"
+  default_prompt: "Help with the spotify-play-history project: infra (Terraform), ingest app, and Dataform models."
