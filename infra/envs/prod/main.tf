@@ -3,6 +3,11 @@ provider "google" {
   region  = var.region
 }
 
+provider "google-beta" {
+  project = var.project_id
+  region  = var.region
+}
+
 locals {
   raw_dataset  = "spotify_raw"
   model_dataset = "spotify"
@@ -29,16 +34,23 @@ resource "google_project_service" "services" {
   disable_on_destroy = false
 }
 
+resource "time_sleep" "wait_for_service_enablement" {
+  depends_on      = [google_project_service.services]
+  create_duration = "90s"
+}
+
 resource "google_bigquery_dataset" "raw" {
   dataset_id = local.raw_dataset
   location   = var.bq_location
   project    = var.project_id
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_dataset" "model" {
   dataset_id = local.model_dataset
   location   = var.bq_location
   project    = var.project_id
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_table" "plays_raw" {
@@ -54,6 +66,7 @@ resource "google_bigquery_table" "plays_raw" {
   }
 
   clustering = ["played_at", "track_id"]
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_table" "state" {
@@ -62,6 +75,7 @@ resource "google_bigquery_table" "state" {
   project             = var.project_id
   schema              = file("${path.module}/schemas/state.json")
   deletion_protection = false
+  depends_on          = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_client_id" {
@@ -70,6 +84,7 @@ resource "google_secret_manager_secret" "spotify_client_id" {
   replication {
     auto {}
   }
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_client_secret" {
@@ -78,6 +93,7 @@ resource "google_secret_manager_secret" "spotify_client_secret" {
   replication {
     auto {}
   }
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_refresh_token" {
@@ -86,6 +102,7 @@ resource "google_secret_manager_secret" "spotify_refresh_token" {
   replication {
     auto {}
   }
+  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_service_account" "function" {
@@ -125,7 +142,6 @@ data "archive_file" "app_zip" {
   output_path = "${path.module}/.tmp/app.zip"
   excludes    = [
     "node_modules",
-    "dist",
     ".git",
     ".DS_Store"
   ]
@@ -235,6 +251,7 @@ resource "google_cloud_scheduler_job" "ingest" {
 }
 
 resource "google_dataform_repository" "repo" {
+  provider     = google-beta
   count        = var.enable_dataform ? 1 : 0
   name         = var.dataform_repo_name
   display_name = var.dataform_repo_name
@@ -242,23 +259,26 @@ resource "google_dataform_repository" "repo" {
   region       = var.region
 }
 
-resource "google_dataform_release_config" "release" {
+resource "google_dataform_repository_release_config" "release" {
+  provider     = google-beta
   count        = var.enable_dataform ? 1 : 0
   name         = var.dataform_release_config_name
   project      = var.project_id
   region       = var.region
   repository   = google_dataform_repository.repo[0].name
+  git_commitish = var.dataform_git_commitish
 
   time_zone    = "Asia/Tokyo"
 }
 
-resource "google_dataform_workflow_config" "schedule" {
+resource "google_dataform_repository_workflow_config" "schedule" {
+  provider     = google-beta
   count        = var.enable_dataform ? 1 : 0
   name         = var.dataform_schedule_name
   project      = var.project_id
   region       = var.region
   repository   = google_dataform_repository.repo[0].name
 
-  release_config = google_dataform_release_config.release[0].name
+  release_config = google_dataform_repository_release_config.release[0].name
   cron_schedule  = "0 * * * *"
 }

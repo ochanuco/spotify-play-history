@@ -33,7 +33,7 @@ variable "schedule" {
 variable "app_source_dir" {
   type        = string
   description = "Path to app source directory"
-  default     = "../../app"
+  default     = "../../../app"
 }
 
 variable "enable_dataform" {
@@ -49,6 +49,12 @@ variable "dataform_repo_name" {
 variable "dataform_release_config_name" {
   type        = string
   default     = "spotify-play-history"
+}
+
+variable "dataform_git_commitish" {
+  type        = string
+  description = "Git branch/tag/commit for Dataform release config"
+  default     = "main"
 }
 
 variable "dataform_schedule_name" {
