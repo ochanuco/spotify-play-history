@@ -191,7 +191,7 @@ resource "google_cloudfunctions2_function" "ingest" {
     min_instance_count    = 0
     available_memory      = "256M"
     timeout_seconds       = 60
-    ingress_settings      = "ALLOW_ALL"
+    ingress_settings      = "ALLOW_INTERNAL_ONLY"
     service_account_email = google_service_account.function.email
 
     environment_variables = {
@@ -300,6 +300,6 @@ resource "google_dataform_repository_workflow_config" "schedule" {
   region     = var.region
   repository = google_dataform_repository.repo[0].name
 
-  release_config = google_dataform_repository_release_config.release[0].name
+  release_config = google_dataform_repository_release_config.release[0].id
   cron_schedule  = "0 * * * *"
 }
