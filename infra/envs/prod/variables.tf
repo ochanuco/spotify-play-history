@@ -16,18 +16,18 @@ variable "bq_location" {
 }
 
 variable "function_name" {
-  type        = string
-  default     = "spotify-play-history"
+  type    = string
+  default = "spotify-play-history"
 }
 
 variable "scheduler_name" {
-  type        = string
-  default     = "spotify-play-history"
+  type    = string
+  default = "spotify-play-history"
 }
 
 variable "schedule" {
-  type        = string
-  default     = "*/10 * * * *"
+  type    = string
+  default = "*/10 * * * *"
 }
 
 variable "app_source_dir" {
@@ -37,18 +37,18 @@ variable "app_source_dir" {
 }
 
 variable "enable_dataform" {
-  type        = bool
-  default     = false
+  type    = bool
+  default = false
 }
 
 variable "dataform_repo_name" {
-  type        = string
-  default     = "spotify-play-history"
+  type    = string
+  default = "spotify-play-history"
 }
 
 variable "dataform_release_config_name" {
-  type        = string
-  default     = "spotify-play-history"
+  type    = string
+  default = "spotify-play-history"
 }
 
 variable "dataform_git_commitish" {
@@ -58,6 +58,6 @@ variable "dataform_git_commitish" {
 }
 
 variable "dataform_schedule_name" {
-  type        = string
-  default     = "spotify-play-history"
+  type    = string
+  default = "spotify-play-history"
 }

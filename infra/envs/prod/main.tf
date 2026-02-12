@@ -9,10 +9,10 @@ provider "google-beta" {
 }
 
 locals {
-  raw_dataset  = "spotify_raw"
-  model_dataset = "spotify"
+  raw_dataset     = "spotify_raw"
+  model_dataset   = "spotify"
   plays_raw_table = "plays_raw"
-  state_table = "state"
+  state_table     = "state"
 }
 
 resource "google_project_service" "services" {
@@ -29,8 +29,8 @@ resource "google_project_service" "services" {
     "dataform.googleapis.com"
   ])
 
-  project = var.project_id
-  service = each.key
+  project            = var.project_id
+  service            = each.key
   disable_on_destroy = false
 }
 
@@ -111,36 +111,53 @@ resource "google_service_account" "function" {
   project      = var.project_id
 }
 
-resource "google_project_iam_member" "fn_bq_editor" {
-  project = var.project_id
-  role    = "roles/bigquery.dataEditor"
-  member  = "serviceAccount:${google_service_account.function.email}"
-}
-
 resource "google_project_iam_member" "fn_bq_job_user" {
   project = var.project_id
   role    = "roles/bigquery.jobUser"
   member  = "serviceAccount:${google_service_account.function.email}"
 }
 
-resource "google_project_iam_member" "fn_secret_accessor" {
-  project = var.project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${google_service_account.function.email}"
+resource "google_bigquery_dataset_iam_member" "fn_raw_dataset_editor" {
+  dataset_id = google_bigquery_dataset.raw.dataset_id
+  project    = var.project_id
+  role       = "roles/bigquery.dataEditor"
+  member     = "serviceAccount:${google_service_account.function.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_client_id" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.spotify_client_id.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.function.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_client_secret" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.spotify_client_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.function.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_refresh_token" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.spotify_refresh_token.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.function.email}"
 }
 
 resource "google_storage_bucket" "source" {
-  name          = "${var.project_id}-spotify-play-history-src"
-  location      = var.region
-  force_destroy = true
+  name                        = "${var.project_id}-spotify-play-history-src"
+  location                    = var.region
+  force_destroy               = true
   uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
 }
 
 data "archive_file" "app_zip" {
   type        = "zip"
   source_dir  = var.app_source_dir
   output_path = "${path.module}/.tmp/app.zip"
-  excludes    = [
+  excludes = [
     "node_modules",
     ".git",
     ".DS_Store"
@@ -170,19 +187,19 @@ resource "google_cloudfunctions2_function" "ingest" {
   }
 
   service_config {
-    max_instance_count = 1
-    min_instance_count = 0
-    available_memory   = "256M"
-    timeout_seconds    = 60
-    ingress_settings   = "ALLOW_ALL"
+    max_instance_count    = 1
+    min_instance_count    = 0
+    available_memory      = "256M"
+    timeout_seconds       = 60
+    ingress_settings      = "ALLOW_ALL"
     service_account_email = google_service_account.function.email
 
     environment_variables = {
-      PROJECT_ID       = var.project_id
-      BQ_RAW_DATASET   = local.raw_dataset
-      BQ_PLAYS_TABLE   = local.plays_raw_table
-      BQ_STATE_TABLE   = local.state_table
-      ROLLBACK_MS      = "120000"
+      PROJECT_ID             = var.project_id
+      BQ_RAW_DATASET         = local.raw_dataset
+      BQ_PLAYS_TABLE         = local.plays_raw_table
+      BQ_STATE_TABLE         = local.state_table
+      ROLLBACK_MS            = "120000"
       DEFAULT_LOOKBACK_HOURS = "48"
     }
 
@@ -209,7 +226,11 @@ resource "google_cloudfunctions2_function" "ingest" {
   }
 
   depends_on = [
-    google_project_service.services
+    google_project_service.services,
+    google_bigquery_dataset_iam_member.fn_raw_dataset_editor,
+    google_secret_manager_secret_iam_member.fn_secret_accessor_client_id,
+    google_secret_manager_secret_iam_member.fn_secret_accessor_client_secret,
+    google_secret_manager_secret_iam_member.fn_secret_accessor_refresh_token
   ]
 }
 
@@ -260,24 +281,24 @@ resource "google_dataform_repository" "repo" {
 }
 
 resource "google_dataform_repository_release_config" "release" {
-  provider     = google-beta
-  count        = var.enable_dataform ? 1 : 0
-  name         = var.dataform_release_config_name
-  project      = var.project_id
-  region       = var.region
-  repository   = google_dataform_repository.repo[0].name
+  provider      = google-beta
+  count         = var.enable_dataform ? 1 : 0
+  name          = var.dataform_release_config_name
+  project       = var.project_id
+  region        = var.region
+  repository    = google_dataform_repository.repo[0].name
   git_commitish = var.dataform_git_commitish
 
-  time_zone    = "Asia/Tokyo"
+  time_zone = "Asia/Tokyo"
 }
 
 resource "google_dataform_repository_workflow_config" "schedule" {
-  provider     = google-beta
-  count        = var.enable_dataform ? 1 : 0
-  name         = var.dataform_schedule_name
-  project      = var.project_id
-  region       = var.region
-  repository   = google_dataform_repository.repo[0].name
+  provider   = google-beta
+  count      = var.enable_dataform ? 1 : 0
+  name       = var.dataform_schedule_name
+  project    = var.project_id
+  region     = var.region
+  repository = google_dataform_repository.repo[0].name
 
   release_config = google_dataform_repository_release_config.release[0].name
   cron_schedule  = "0 * * * *"

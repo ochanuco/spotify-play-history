@@ -213,7 +213,11 @@ export async function ingest(req: { method?: string }, res: { status: (code: num
 
     res.status(200).send(`Inserted ${rows.length} rows`);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).send(message);
+    if (err instanceof Error) {
+      console.error("Ingestion failed", { message: err.message, stack: err.stack });
+    } else {
+      console.error("Ingestion failed", { err });
+    }
+    res.status(500).send("Internal server error");
   }
 }
