@@ -1,0 +1,27 @@
+config {
+  type: "incremental",
+  schema: "spotify",
+  uniqueKey: ["user_id", "played_at", "track_id"]
+}
+
+select
+  user_id,
+  played_at,
+  track_id,
+  track_name,
+  artist_name,
+  album_id,
+  album_name,
+  album_image_url,
+  duration_ms,
+  context_type,
+  context_uri,
+  ingested_at,
+  run_id
+from ${ref("plays_raw")}
+${when(incremental(), "where date(played_at) >= date_sub(current_date(), interval 2 day)", "")}
+qualify
+  row_number() over (
+    partition by user_id, played_at, track_id
+    order by ingested_at asc
+  ) = 1
