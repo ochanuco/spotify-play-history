@@ -58,7 +58,7 @@ resource "google_bigquery_table" "plays_raw" {
   table_id            = local.plays_raw_table
   project             = var.project_id
   schema              = file("${path.module}/schemas/plays_raw.json")
-  deletion_protection = false
+  deletion_protection = true
 
   time_partitioning {
     type  = "DAY"
@@ -74,7 +74,7 @@ resource "google_bigquery_table" "state" {
   table_id            = local.state_table
   project             = var.project_id
   schema              = file("${path.module}/schemas/state.json")
-  deletion_protection = false
+  deletion_protection = true
   depends_on          = [time_sleep.wait_for_service_enablement]
 }
 
