@@ -1,0 +1,14 @@
+config {
+  type: "view",
+  schema: "spotify",
+  name: "listening_by_hour"
+}
+
+select
+  cast(format_timestamp('%u', played_at, 'Asia/Tokyo') as int64) as weekday_iso,
+  format_timestamp('%a', played_at, 'Asia/Tokyo') as weekday_label,
+  extract(hour from datetime(played_at, 'Asia/Tokyo')) as hour_jst,
+  count(*) as play_count
+from ${ref("plays")}
+where played_at >= timestamp_sub(current_timestamp(), interval 90 day)
+group by weekday_iso, weekday_label, hour_jst
