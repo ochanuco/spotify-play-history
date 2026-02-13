@@ -1,0 +1,29 @@
+# OS/editor
+.DS_Store
+
+# App (Node.js)
+app/node_modules/
+app/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Terraform (all envs)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/plan.out
+**/crash.log
+**/crash.*.log
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
+**/*.tfvars
+**/*.tfvars.json
+
+# Local temp artifacts
+**/.tmp/
+*.zip
