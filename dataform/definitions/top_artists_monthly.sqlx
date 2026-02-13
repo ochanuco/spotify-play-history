@@ -1,0 +1,21 @@
+config {
+  type: "table",
+  schema: "spotify",
+  name: "top_artists_monthly"
+}
+
+with monthly_counts as (
+  select
+    date_trunc(date(played_at, 'Asia/Tokyo'), month) as month_jst,
+    artist_name,
+    count(*) as play_count
+  from ${ref("plays")}
+  group by month_jst, artist_name
+)
+
+select
+  month_jst,
+  artist_name,
+  play_count,
+  dense_rank() over (partition by month_jst order by play_count desc, artist_name asc) as artist_rank
+from monthly_counts

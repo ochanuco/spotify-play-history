@@ -27,3 +27,6 @@ pnpm-debug.log*
 # Local temp artifacts
 **/.tmp/
 *.zip
+
+# Dataform local credentials
+dataform/.df-credentials.json
