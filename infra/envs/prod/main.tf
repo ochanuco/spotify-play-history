@@ -178,6 +178,8 @@ resource "google_cloudfunctions2_function" "ingest" {
   build_config {
     runtime     = "nodejs20"
     entry_point = "ingest"
+    # 既定の compute SA は権限を外してあるので、ochanuco/chabatake が用意したビルド専用 SA を使う
+    service_account = "projects/${var.project_id}/serviceAccounts/spotify-play-history-build@${var.project_id}.iam.gserviceaccount.com"
     source {
       storage_source {
         bucket = google_storage_bucket.source.name
