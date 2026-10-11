@@ -13,6 +13,10 @@ locals {
   model_dataset   = "spotify"
   plays_raw_table = "plays_raw"
   state_table     = "state"
+
+  # service account は ochanuco/chabatake が管理する
+  function_sa_email  = "spotify-play-history-fn@${var.project_id}.iam.gserviceaccount.com"
+  scheduler_sa_email = "spotify-play-history-scheduler@${var.project_id}.iam.gserviceaccount.com"
 }
 
 resource "google_project_service" "services" {
@@ -105,44 +109,32 @@ resource "google_secret_manager_secret" "spotify_refresh_token" {
   depends_on = [time_sleep.wait_for_service_enablement]
 }
 
-resource "google_service_account" "function" {
-  account_id   = "spotify-play-history-fn"
-  display_name = "spotify-play-history function"
-  project      = var.project_id
-}
-
-resource "google_project_iam_member" "fn_bq_job_user" {
-  project = var.project_id
-  role    = "roles/bigquery.jobUser"
-  member  = "serviceAccount:${google_service_account.function.email}"
-}
-
 resource "google_bigquery_dataset_iam_member" "fn_raw_dataset_editor" {
   dataset_id = google_bigquery_dataset.raw.dataset_id
   project    = var.project_id
   role       = "roles/bigquery.dataEditor"
-  member     = "serviceAccount:${google_service_account.function.email}"
+  member     = "serviceAccount:${local.function_sa_email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_client_id" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.spotify_client_id.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.function.email}"
+  member    = "serviceAccount:${local.function_sa_email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_client_secret" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.spotify_client_secret.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.function.email}"
+  member    = "serviceAccount:${local.function_sa_email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "fn_secret_accessor_refresh_token" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.spotify_refresh_token.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.function.email}"
+  member    = "serviceAccount:${local.function_sa_email}"
 }
 
 resource "google_storage_bucket" "source" {
@@ -194,7 +186,7 @@ resource "google_cloudfunctions2_function" "ingest" {
     available_memory      = "256M"
     timeout_seconds       = 60
     ingress_settings      = "ALLOW_INTERNAL_ONLY"
-    service_account_email = google_service_account.function.email
+    service_account_email = local.function_sa_email
 
     environment_variables = {
       PROJECT_ID             = var.project_id
@@ -236,18 +228,12 @@ resource "google_cloudfunctions2_function" "ingest" {
   ]
 }
 
-resource "google_service_account" "scheduler" {
-  account_id   = "spotify-play-history-scheduler"
-  display_name = "spotify-play-history scheduler"
-  project      = var.project_id
-}
-
 resource "google_cloud_run_service_iam_member" "invoker" {
   location = var.region
   project  = var.project_id
   service  = google_cloudfunctions2_function.ingest.service_config[0].service
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.scheduler.email}"
+  member   = "serviceAccount:${local.scheduler_sa_email}"
 }
 
 resource "google_cloud_scheduler_job" "ingest" {
@@ -263,7 +249,7 @@ resource "google_cloud_scheduler_job" "ingest" {
     uri         = google_cloudfunctions2_function.ingest.service_config[0].uri
 
     oidc_token {
-      service_account_email = google_service_account.scheduler.email
+      service_account_email = local.scheduler_sa_email
       audience              = google_cloudfunctions2_function.ingest.service_config[0].uri
     }
   }

@@ -19,6 +19,11 @@
 - `dataform/` Dataform SQLX
 - `skills/` Codex技能
 
+## インフラ操作
+- `infra/envs/prod` の state は Cloudflare R2（`chabatake-tfstate`）に置く
+- 実行は 1Password 経由: `op run --env-file=infra/envs/prod/.env.op -- tofu -chdir=infra/envs/prod plan`
+- サービスアカウント（`spotify-play-history-fn` / `-scheduler` / `-build`）と `roles/bigquery.jobUser` は ochanuco/chabatake が管理する。ここでは作らない
+
 ## コーディング方針
 - append-only ingestion（重複許容）
 - 正しさはDataformで担保
