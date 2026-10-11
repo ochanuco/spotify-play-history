@@ -1,5 +1,23 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.11"
+  backend "s3" {
+    bucket = "chabatake-tfstate"
+    key    = "spotify-play-history/terraform.tfstate"
+    region = "auto"
+
+    endpoints = {
+      s3 = "https://0f0afc29667897a1a5452c6e36859467.r2.cloudflarestorage.com"
+    }
+
+    use_lockfile                = true
+    use_path_style              = true
+    skip_credentials_validation = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+    skip_s3_checksum            = true
+  }
+
   required_providers {
     google = {
       source  = "hashicorp/google"

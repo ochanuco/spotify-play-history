@@ -13,6 +13,11 @@ Spotifyの再生履歴をGCPで収集・可視化するためのプロジェク�
 - `dataform/` Dataform SQLX
 - `skills/` Codex技能
 
+## インフラの実行
+- state は Cloudflare R2（`chabatake-tfstate`、key は `spotify-play-history/terraform.tfstate`）
+- `op run --env-file=infra/envs/prod/.env.op -- tofu -chdir=infra/envs/prod plan`（`apply` も同様）
+- サービスアカウントと `roles/bigquery.jobUser` は ochanuco/chabatake が管理する
+
 ## 状態
 - 設計: `PLAN.md`
 - 初期骨組みのみ（実装はこれから）

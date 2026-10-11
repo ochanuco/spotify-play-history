@@ -3,9 +3,9 @@ output "function_url" {
 }
 
 output "scheduler_service_account" {
-  value = google_service_account.scheduler.email
+  value = local.scheduler_sa_email
 }
 
 output "function_service_account" {
-  value = google_service_account.function.email
+  value = local.function_sa_email
 }
