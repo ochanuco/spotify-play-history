@@ -19,42 +19,16 @@ locals {
   scheduler_sa_email = "spotify-play-history-scheduler@${var.project_id}.iam.gserviceaccount.com"
 }
 
-resource "google_project_service" "services" {
-  for_each = toset([
-    "bigquery.googleapis.com",
-    "cloudfunctions.googleapis.com",
-    "cloudbuild.googleapis.com",
-    "run.googleapis.com",
-    "cloudscheduler.googleapis.com",
-    "secretmanager.googleapis.com",
-    "artifactregistry.googleapis.com",
-    "iam.googleapis.com",
-    "storage.googleapis.com",
-    "dataform.googleapis.com"
-  ])
-
-  project            = var.project_id
-  service            = each.key
-  disable_on_destroy = false
-}
-
-resource "time_sleep" "wait_for_service_enablement" {
-  depends_on      = [google_project_service.services]
-  create_duration = "90s"
-}
-
 resource "google_bigquery_dataset" "raw" {
   dataset_id = local.raw_dataset
   location   = var.bq_location
   project    = var.project_id
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_dataset" "model" {
   dataset_id = local.model_dataset
   location   = var.bq_location
   project    = var.project_id
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_table" "plays_raw" {
@@ -70,7 +44,6 @@ resource "google_bigquery_table" "plays_raw" {
   }
 
   clustering = ["played_at", "track_id"]
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_table" "state" {
@@ -79,7 +52,6 @@ resource "google_bigquery_table" "state" {
   project             = var.project_id
   schema              = file("${path.module}/schemas/state.json")
   deletion_protection = true
-  depends_on          = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_client_id" {
@@ -88,7 +60,6 @@ resource "google_secret_manager_secret" "spotify_client_id" {
   replication {
     auto {}
   }
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_client_secret" {
@@ -97,7 +68,6 @@ resource "google_secret_manager_secret" "spotify_client_secret" {
   replication {
     auto {}
   }
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_secret_manager_secret" "spotify_refresh_token" {
@@ -106,7 +76,6 @@ resource "google_secret_manager_secret" "spotify_refresh_token" {
   replication {
     auto {}
   }
-  depends_on = [time_sleep.wait_for_service_enablement]
 }
 
 resource "google_bigquery_dataset_iam_member" "fn_raw_dataset_editor" {
@@ -220,7 +189,6 @@ resource "google_cloudfunctions2_function" "ingest" {
   }
 
   depends_on = [
-    google_project_service.services,
     google_bigquery_dataset_iam_member.fn_raw_dataset_editor,
     google_secret_manager_secret_iam_member.fn_secret_accessor_client_id,
     google_secret_manager_secret_iam_member.fn_secret_accessor_client_secret,
