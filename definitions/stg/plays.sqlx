@@ -37,7 +37,6 @@ select
   json_value(item, "$.track.name") as track_name,
   lax_int64(item.track.duration_ms) as duration_ms,
   lax_bool(item.track.explicit) as explicit,
-  lax_int64(item.track.popularity) as popularity,
   lax_bool(item.track.is_local) as is_local,
   array(select json_value(a, "$.id") from unnest(json_query_array(item, "$.track.artists")) as a) as artist_ids,
   array(select json_value(a, "$.name") from unnest(json_query_array(item, "$.track.artists")) as a) as artist_names,

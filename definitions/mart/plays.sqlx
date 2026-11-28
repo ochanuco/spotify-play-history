@@ -2,8 +2,24 @@ config {
   type: "view",
   schema: "spotify_mart",
   name: "plays",
-  description: "Looker Studio 向けの再生の一覧。日時は JST"
+  description: "Looker Studio 向けの再生の一覧。日時は JST。聴いた時間とスキップは前の再生との間隔から推定する"
 }
+
+-- played_at は再生を終えた時刻なので、続けて聴いている間は「前の再生の played_at からの間隔」がその曲を聴いた時間になる。
+-- 間隔が曲の長さを 1 割以上超えたら、間に休みがあったとみなして推定しない（null）
+with ordered as (
+  select
+    *,
+    timestamp_diff(played_at, lag(played_at) over (order by played_at), millisecond) as gap_ms
+  from ${ref("spotify_stg", "plays")}
+),
+
+estimated as (
+  select
+    *,
+    gap_ms is not null and gap_ms <= duration_ms * 1.1 as continuous
+  from ordered
+)
 
 select
   played_at,
@@ -18,6 +34,8 @@ select
   album_name,
   album_image_url,
   duration_ms,
+  if(continuous, least(gap_ms, duration_ms), null) as listened_ms_estimate,
+  if(continuous, gap_ms < duration_ms * 0.9, null) as skipped_estimate,
   context_type,
   context_uri
-from ${ref("spotify_stg", "plays")}
+from estimated
