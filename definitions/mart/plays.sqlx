@@ -1,0 +1,23 @@
+config {
+  type: "view",
+  schema: "spotify_mart",
+  name: "plays",
+  description: "Looker Studio 向けの再生の一覧。日時は JST"
+}
+
+select
+  played_at,
+  datetime(played_at, "Asia/Tokyo") as played_at_jst,
+  date(played_at, "Asia/Tokyo") as played_date_jst,
+  extract(hour from datetime(played_at, "Asia/Tokyo")) as hour_jst,
+  extract(dayofweek from datetime(played_at, "Asia/Tokyo")) as weekday_jst,
+  track_id,
+  track_name,
+  primary_artist_name as artist_name,
+  array_to_string(artist_names, ", ") as artist_names,
+  album_name,
+  album_image_url,
+  duration_ms,
+  context_type,
+  context_uri
+from ${ref("spotify_stg", "plays")}

@@ -1,0 +1,19 @@
+{
+	"name": "spotify-play-history-worker",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@12.18.0",
+	"scripts": {
+		"postinstall": "wrangler types",
+		"build": "wrangler deploy --dry-run --outdir dist",
+		"typecheck": "tsc",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@types/node": "^26.0.0",
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.0",
+		"wrangler": "^4.151.0"
+	}
+}

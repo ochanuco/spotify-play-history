@@ -1,0 +1,15 @@
+config {
+  type: "view",
+  schema: "spotify_mart",
+  name: "listening_by_hour",
+  description: "直近 90 日の曜日 × 時間帯（JST）の再生数"
+}
+
+select
+  cast(format_timestamp("%u", played_at, "Asia/Tokyo") as int64) as weekday_iso,
+  format_timestamp("%a", played_at, "Asia/Tokyo") as weekday_label,
+  extract(hour from datetime(played_at, "Asia/Tokyo")) as hour_jst,
+  count(*) as play_count
+from ${ref("spotify_stg", "plays")}
+where played_at >= timestamp_sub(current_timestamp(), interval 90 day)
+group by weekday_iso, weekday_label, hour_jst

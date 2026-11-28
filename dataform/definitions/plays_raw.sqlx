@@ -1,5 +1,0 @@
-config {
-  type: "declaration",
-  schema: "spotify_raw",
-  name: "plays_raw"
-}

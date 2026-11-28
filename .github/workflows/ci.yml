@@ -17,5 +17,5 @@ jobs:
   ci:
     uses: ochanuco/.github/.github/workflows/pnpm.yml@194995de7425c6457f8d802510787afd02ed9235 # v1.7.0
     with:
-      working-directory: app
-      run: pnpm run build
+      working-directory: worker
+      run: pnpm run typecheck && pnpm test && pnpm run build

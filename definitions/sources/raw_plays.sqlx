@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  schema: "spotify_raw",
+  name: "plays",
+  description: "Worker が recently-played の item をそのまま書く。同じ再生が何度も入る"
+}

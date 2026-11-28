@@ -1,0 +1,27 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "spotify-play-history",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	// cron だけで動くので、HTTP の入口は作らない
+	"workers_dev": false,
+	"preview_urls": false,
+	// recently-played は直近 50 曲しか返さないので、聴き続けても取りこぼさない間隔で回す
+	"triggers": {
+		"crons": ["*/10 * * * *"]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "STATE",
+			"id": "e1c51060541245caac02428cc38d67b1"
+		}
+	],
+	"vars": {
+		"GCP_PROJECT_ID": "chanuco",
+		"GATUS_URL": "https://status.chanu.co",
+		"GATUS_ENDPOINT_KEY": "spotify_play-history"
+	},
+	"observability": {
+		"enabled": true
+	}
+}

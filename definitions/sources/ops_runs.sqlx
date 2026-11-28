@@ -1,0 +1,6 @@
+config {
+  type: "declaration",
+  schema: "spotify_ops",
+  name: "runs",
+  description: "Worker の実行ごとの結果"
+}

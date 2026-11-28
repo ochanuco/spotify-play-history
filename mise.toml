@@ -1,2 +1,4 @@
 [tools]
-terraform = "1.17.2"
+opentofu = "1.13.2"
+node = "24"
+pnpm = "12.18.0"

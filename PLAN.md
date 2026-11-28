@@ -1,322 +1,81 @@
-いい判断です。
-**Dataformは今回のケースに“学習コスパが一番高い”**ですし、設計もきれいに分離できます 👍
-以下は **Codexにそのまま投入できる完成版仕様書（Dataform前提）** です。
+# spotify-play-history の設計
 
----
+## 目的
 
-# spotify-play-history
+Spotify の再生履歴を取りこぼさずに貯め、Looker Studio で眺める。
 
-## 仕様書（GCP単体 / Dataform採用 / Terraform管理）
+recently-played API は直近 50 曲しか返さず、過去にさかのぼって取り直せない。取得が止まった期間はそのまま欠けるので、止まったらすぐ気づけることを、取得そのものと同じくらい重く見る。
 
----
+## 全体
 
-## 1. 目的
-
-* Spotify Web API の **Recently Played Tracks（最大50件制限）** を定期取得し、
-  **BigQueryに履歴として永続蓄積**する。
-* 重複は許容して投入し、**BigQuery上で正規化（dedup）**する。
-* 変換・正規化・分析用テーブル作成は **Dataform** に集約する。
-* 可視化は **Looker Studio** を使用し、アルバムジャケットは **画像URLを直接表示**する。
-
----
-
-## 2. 全体アーキテクチャ
-
-```
-Spotify API
-  ↓
-Cloud Scheduler（10分）
-  ↓
-Cloud Functions / Cloud Run
-  ↓（append-only）
-BigQuery.spotify_raw.plays_raw
-  ↓（Dataform）
-BigQuery.spotify.plays
-  ↓
-Looker Studio
+```mermaid
+flowchart LR
+  S[Spotify Web API<br/>recently-played] --> W
+  W[Cloudflare Worker<br/>cron 10 分] -- insertAll --> R[(spotify_raw.plays)]
+  W -- insertAll --> O[(spotify_ops.runs)]
+  W -- 成否を push --> G[Gatus<br/>status.chanu.co] --> D[Discord 通知]
+  R --> DF[Dataform<br/>毎時] --> ST[(spotify_stg.plays)] --> M[(spotify_mart.*)] --> L[Looker Studio]
 ```
 
----
+| 層 | 置き場所 | 持ち主 |
+|---|---|---|
+| 取得 | Cloudflare Worker `spotify-play-history`（`worker/`） | この repo |
+| データ | GCP プロジェクト `chanuco` の BigQuery（asia-northeast1） | dataset・表・権限はこの repo（`infra/`）。プロジェクト・API・SA は ochanuco/chabatake |
+| 変換 | Dataform の repository `spotify-play-history`（repo の root の `workflow_settings.yaml` と `definitions/`） | この repo |
+| 監視 | Gatus の external endpoint `spotify_play-history` | ochanuco/chabatake |
 
-## 3. 非機能要件
+Cloud Scheduler は使わない。取得の起動は Worker の cron、変換の起動は Dataform 自身の schedule が持つ。
 
-### 3.1 コスト
+## 取得（Worker）
 
-* 個人GCP利用前提
-* Cloud Scheduler：1ジョブ（無料枠）
-* 実行基盤：短時間実行、無料枠狙い
-* Dataform：利用料なし
-* BigQuery：クエリ量を **直近N日処理** に制限
+10 分ごとに次を行う。
 
-### 3.2 信頼性
+1. refresh token で access token を取る。Spotify が新しい refresh token を返したら KV に保存し、次からそれを使う。古い token は使えなくなる
+2. KV のカーソル（取り込んだ最新の `played_at`）の 2 分前を `after` にして、recently-played を 50 件まで取る。初回は `after` なしで直近 50 件
+3. item を丸ごと JSON で `spotify_raw.plays` に insertAll する。同じ再生が何度入ってもよい
+4. カーソルを進める
+5. 実行の結果を `spotify_ops.runs` に書き、成否を Gatus に push する
 
-* Spotify API制限（50件）を考慮し、**巻き戻し取得**を必須とする
-* 取得側は冪等性を持たせない（重複OK）
-* 正しさは BigQuery + Dataform が保証する
+refresh token の扱い:
 
-### 3.3 セキュリティ
+- secret `SPOTIFY_REFRESH_TOKEN` は最初の 1 本
+- KV には「どの secret から始まった系列か」（secret のハッシュ）と一緒に、最新の token を持つ
+- secret を取り直して入れ替えると系列が変わるので、KV の古い token ではなく secret を使う
 
-* Spotify secrets（client_secret / refresh_token）は
-  **Secret Managerで管理**
-* Terraform state に secret 実値を含めない
+BigQuery へは SA `spotify-play-history-ingest` の鍵で書く。Workers は Workload Identity Federation に使える ID トークンを出せないため。鍵の権限は `spotify_raw.plays` と `spotify_ops.runs` の 2 つの表への書き込みだけ。
 
----
+## データ
 
-## 4. Spotify API 要件
+| 表 | 種類 | 中身 |
+|---|---|---|
+| `spotify_raw.plays` | 表（`fetched_at` で日分割） | `played_at`、`track_id`、`item`（API の item の JSON）、`fetched_at`、`run_id`。重複あり |
+| `spotify_ops.runs` | 表（`started_at` で日分割） | 実行ごとの `status`（ok / error）、`after_played_at`、`fetched`、`error` |
+| `spotify_ops.ingest_daily` | view | 日ごとの実行回数・失敗回数・最後のエラー |
+| `spotify_stg.plays` | incremental | 1 再生 1 行。`(played_at, track_uri)` で重複を除き、曲・アーティスト・アルバム・コンテキストを列にする |
+| `spotify_mart.plays` | view | Looker Studio 向けの一覧。日時は JST |
+| `spotify_mart.daily_listening` | 表 | JST の日ごとの再生数・分数・曲数・アーティスト数 |
+| `spotify_mart.listening_by_hour` | view | 直近 90 日の曜日 × 時間帯 |
+| `spotify_mart.top_artists_monthly` | 表 | 月ごとのアーティスト別再生数と順位 |
 
-### 4.1 スコープ
+raw に item を丸ごと残すのは、取り直せないデータから後で別の列を作れるようにするため。列を足すときは stg の SQL を変えて、Dataform を full refresh で流し直す。
 
-* `user-read-recently-played`
+重複の除き方: ローカルファイルの再生は `track_id` が null なので、`track_uri` を使って見分ける。`stg.plays` の assertion（`spotify_ops` に作る）が、キーの重複と null を検査する。
 
-### 4.2 エンドポイント
+## 変換（Dataform）
 
-* `GET /v1/me/player/recently-played`
+- release config `main` が毎時 50 分に `main` ブランチを compile し、workflow config `hourly` が毎時 0 分に実行する（JST）
+- 実行は SA `spotify-play-history-dataform`。読むのは raw と ops、書くのは stg・mart・ops
+- Dataform は repo のサブディレクトリを root にできないので、`workflow_settings.yaml` と `definitions/` は repo の root に置く
 
-  * `limit=50`
-  * `after=<epoch_ms>`
+## 監視
 
-### 4.3 取得フィールド
+Worker は毎回、成否を Gatus の external endpoint `spotify_play-history` に push する。push の口は Cloudflare Access が service token を持つ Worker にだけ開けている。
 
-* `played_at`
-* `track.id`
-* `track.name`
-* `track.duration_ms`
-* `track.artists[0].name`
-* `track.album.id`
-* `track.album.name`
-* `track.album.images[]`
-* `context.type`（存在すれば）
-* `context.uri`（存在すれば）
+- 失敗が 3 回続くと Discord に知らせる。直るまで 6 時間ごとに知らせ直し、直ったら知らせる
+- push が 30 分届かなければ失敗とみなす（Worker が動いていない、鍵や Access の token が切れたなど）
 
----
+エラーの中身は `spotify_ops.runs` と Gatus の画面、Worker のログで見る。
 
-## 5. 取得戦略（重要）
+## 秘密
 
-### 5.1 実行頻度
-
-* **10分おき**（5分でも可）
-
-### 5.2 巻き戻し取得
-
-* 前回取得した最大 `played_at` を `last_played_at` として保存
-* 次回取得時：
-
-  ```
-  after = last_played_at_ms - 120000（2分）
-  ```
-
-### 5.3 カーソル管理
-
-* BigQuery `spotify_raw.state` テーブルに保持
-* 単一ユーザー前提のため1行のみ
-
----
-
-## 6. BigQuery データモデル
-
-### 6.1 Dataset
-
-| Dataset       | 用途      |
-| ------------- | ------- |
-| `spotify_raw` | 生データ    |
-| `spotify`     | 正規化・分析用 |
-
-Location：`asia-northeast1`（固定）
-
----
-
-### 6.2 `spotify_raw.plays_raw`（append-only）
-
-**用途**
-
-* 取得ジョブがそのままINSERTする
-* 重複を許容する
-
-**推奨設定**
-
-* partition：`DATE(ingested_at)`
-* cluster：`played_at`, `track_id`
-
-**カラム**
-
-| column          | type      |
-| --------------- | --------- |
-| user_id         | STRING    |
-| played_at       | TIMESTAMP |
-| track_id        | STRING    |
-| track_name      | STRING    |
-| artist_name     | STRING    |
-| album_id        | STRING    |
-| album_name      | STRING    |
-| album_image_url | STRING    |
-| duration_ms     | INT64     |
-| context_type    | STRING    |
-| context_uri     | STRING    |
-| ingested_at     | TIMESTAMP |
-| run_id          | STRING    |
-
----
-
-### 6.3 `spotify_raw.state`
-
-| column     | type      |
-| ---------- | --------- |
-| key        | STRING    |
-| value      | STRING    |
-| updated_at | TIMESTAMP |
-
-* `key = 'last_played_at'`
-* value は ISO8601 or epoch ms
-
----
-
-## 7. Dataform 設計（中核）
-
-### 7.1 Dataform Repository
-
-* 管理対象：**変換・正規化・分析用SQLのみ**
-* Git管理（infraとは分離）
-
-### 7.2 モデル：`spotify.plays`
-
-**役割**
-
-* `plays_raw` から重複排除した事実テーブルを生成
-* Looker Studio の参照元
-
-**同一再生の定義（uniqueKey）**
-
-```
-(user_id, played_at, track_id)
-```
-
-**処理要件**
-
-* `ingested_at` は最小値を採用
-* 処理対象は **直近2日分** に限定（コスト削減）
-
-**Dataform設定（概念）**
-
-* type: table
-* incremental: true
-* uniqueKey:
-
-  * user_id
-  * played_at
-  * track_id
-
----
-
-### 7.3 将来拡張（任意）
-
-* `listening_by_hour`
-* `artists_daily`
-* `top_tracks_monthly`
-
-※ すべて Dataform 側で定義
-
----
-
-## 8. Looker Studio 要件
-
-### 8.1 接続
-
-* BigQuery `spotify.plays`
-
-### 8.2 画像表示
-
-* `album_image_url` を
-
-  * フィールド型「画像URL」
-  * または `IMAGE(album_image_url)`
-
-### 8.3 最低限のダッシュボード
-
-* 最近再生一覧（時刻 × ジャケ × 曲名）
-* 曜日 × 時間帯ヒートマップ
-* Topアーティスト（月次）
-
----
-
-## 9. Terraform 管理方針
-
-### 9.1 Terraformで管理するもの
-
-* BigQuery datasets / tables
-* Cloud Scheduler
-* Cloud Functions / Cloud Run
-* Service Account
-* IAM
-* Secret Manager（secret container）
-* Dataform Repository / Release / Schedule
-
-### 9.2 Terraformで管理しないもの
-
-* Spotify secrets の **値**
-* Dataform SQLコード本体（別Git）
-
----
-
-## 10. IAM（最小権限）
-
-### 実行用 Service Account
-
-* BigQuery Data Editor（dataset単位）
-* BigQuery Job User
-* Secret Manager Secret Accessor
-
----
-
-## 11. 受け入れ条件（Acceptance Criteria）
-
-* Spotify履歴が10分おきに `plays_raw` に蓄積される
-* 巻き戻し取得により重複が発生しても `spotify.plays` は一意
-* Dataform実行後、Looker Studioで履歴が正しく可視化される
-* ジャケット画像がURL経由で表示される
-
----
-
-## 12. 決め打ちパラメータ（推奨）
-
-| 項目                 | 値    |
-| ------------------ | ---- |
-| Scheduler interval | 10分  |
-| 巻き戻し               | 2分   |
-| Dataform処理範囲       | 直近2日 |
-| 画像URL              | 64px |
-
----
-
-## 13. リポジトリ構成（推奨）
-
-```
-spotify-play-history/
-├── infra/          # Terraform
-│   ├── modules/
-│   └── envs/prod/
-├── app/            # Spotify取得Function
-├── dataform/       # Dataform repo（別管理でも可）
-└── README.md
-```
-
----
-
-### 補足（設計の意図）
-
-* **取得と変換を完全分離**
-* **BigQueryをSingle Source of Truth**
-* **Dataformで「分析用に育てていく」前提**
-
----
-
-この仕様は
-👉 **Codexが迷わず実装できる粒度**
-👉 **Dataform学習教材としても実戦的**
-
-次にやるならおすすめは：
-
-1. **Dataform側の `plays.sqlx` を設計レビュー**
-2. Terraformの **resource一覧だけ洗い出し**
-3. Looker Studioの **最初のダッシュボード設計**
-
-どこから詰めます？
+1Password の `gh-deploy/spotify-play-history` に置き、deploy workflow が Worker の secret として反映する。Dataform が GitHub を読む token だけは Secret Manager の `spotify-play-history-dataform-git-token` に直接置く。
