@@ -79,4 +79,4 @@ Worker は毎回、成否を Gatus の external endpoint `spotify_play-history` 
 
 ## 秘密
 
-1Password の `gh-deploy/spotify-play-history` に置き、deploy workflow が Worker の secret として反映する。Dataform が GitHub を読む token だけは Secret Manager の `spotify-play-history-dataform-git-token` に直接置く。
+1Password の `gh-deploy/spotify-play-history` に置き、deploy workflow が Worker の secret として反映する。Dataform が GitHub を読む token は、Dataform が読む Secret Manager の `spotify-play-history-dataform-git-token` に置き、控えを 1Password の同じ item に置く。

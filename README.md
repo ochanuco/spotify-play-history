@@ -40,7 +40,7 @@ SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... node worker/scripts/authorize.ts
 
 ### Dataform の git の token
 
-GitHub の fine-grained PAT（この repo の Contents を読むだけ）を作り、Secret Manager に入れる。
+GitHub の fine-grained PAT（この repo の Contents を読むだけ）を作り、Secret Manager に入れる。控えを 1Password の `gh-deploy/spotify-play-history` の `github_dataform_token` に置く。
 
 ```sh
 gcloud secrets versions add spotify-play-history-dataform-git-token --project=chanuco --data-file=-
