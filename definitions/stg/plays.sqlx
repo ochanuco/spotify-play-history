@@ -1,0 +1,60 @@
+config {
+  type: "incremental",
+  schema: "spotify_stg",
+  name: "plays",
+  description: "1 再生 1 行。raw の重複を除き、item を列に展開する",
+  // ローカルファイルの再生は track_id が null なので、track_uri で見分ける
+  uniqueKey: ["played_at", "track_uri"],
+  bigquery: {
+    partitionBy: "date(played_at)",
+    clusterBy: ["primary_artist_id", "track_id"]
+  },
+  assertions: {
+    uniqueKey: ["played_at", "track_uri"],
+    nonNull: ["played_at", "track_uri"]
+  }
+}
+
+with source as (
+  select *
+  from ${ref("spotify_raw", "plays")}
+  ${when(incremental(), `where fetched_at >= timestamp_sub((select coalesce(max(fetched_at), timestamp "1970-01-01") from ${self()}), interval 1 hour)`)}
+),
+
+deduped as (
+  select *
+  from source
+  qualify row_number() over (
+    partition by played_at, json_value(item, "$.track.uri")
+    order by fetched_at
+  ) = 1
+)
+
+select
+  played_at,
+  track_id,
+  json_value(item, "$.track.uri") as track_uri,
+  json_value(item, "$.track.name") as track_name,
+  lax_int64(item.track.duration_ms) as duration_ms,
+  lax_bool(item.track.explicit) as explicit,
+  lax_int64(item.track.popularity) as popularity,
+  lax_bool(item.track.is_local) as is_local,
+  array(select json_value(a, "$.id") from unnest(json_query_array(item, "$.track.artists")) as a) as artist_ids,
+  array(select json_value(a, "$.name") from unnest(json_query_array(item, "$.track.artists")) as a) as artist_names,
+  json_value(item, "$.track.artists[0].id") as primary_artist_id,
+  json_value(item, "$.track.artists[0].name") as primary_artist_name,
+  json_value(item, "$.track.album.id") as album_id,
+  json_value(item, "$.track.album.name") as album_name,
+  json_value(item, "$.track.album.album_type") as album_type,
+  json_value(item, "$.track.album.release_date") as album_release_date,
+  -- images は大きい順。Looker Studio の表に出すので、一覧向けの 300px 前後を選ぶ
+  (
+    select json_value(img, "$.url")
+    from unnest(json_query_array(item, "$.track.album.images")) as img
+    order by abs(coalesce(lax_int64(img.width), 640) - 300)
+    limit 1
+  ) as album_image_url,
+  json_value(item, "$.context.type") as context_type,
+  json_value(item, "$.context.uri") as context_uri,
+  fetched_at
+from deduped

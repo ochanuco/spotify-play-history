@@ -1,31 +1,51 @@
 # spotify-play-history
 
-Spotifyの再生履歴をGCPで収集・可視化するためのプロジェクト。
-
-## 目的
-- Spotify APIの履歴をBigQueryへappend-onlyで蓄積
-- Dataformで重複排除・正規化
-- Looker Studioで可視化
+Spotify の再生履歴を Cloudflare Worker で取得して BigQuery に貯め、Dataform で整えて Looker Studio で見る。設計は `PLAN.md`。
 
 ## 構成
-- `infra/` Terraform
-- `app/` 取得アプリ（Cloud Run/Functions）
-- `dataform/` Dataform SQLX
-- `skills/` Codex技能
 
-## インフラの実行
-- state は Cloudflare R2（`chabatake-tfstate`、key は `spotify-play-history/terraform.tfstate`）
-- `op run --env-file=infra/envs/prod/.env.op -- tofu -chdir=infra/envs/prod plan`（`apply` も同様）
-- サービスアカウントと `roles/bigquery.jobUser` は ochanuco/chabatake が管理する
+| パス | 中身 |
+|---|---|
+| `worker/` | 取得の Worker（TypeScript、wrangler） |
+| `definitions/`、`workflow_settings.yaml` | Dataform（repo の root に置く必要がある） |
+| `infra/envs/prod/` | BigQuery の dataset・表・権限、Dataform の repository（OpenTofu） |
 
-## 状態
-- 設計: `PLAN.md`
-- 初期骨組みのみ（実装はこれから）
+## 開発
 
-## Looker Studio（正攻法）
-1. Dataformで `spotify.plays` を更新（重複排除済みファクト）。
-2. Looker Studio から BigQuery 接続し、以下をデータソースに使う。
-   - 最近再生一覧: `spotify.plays_recent`
-   - 曜日×時間帯ヒートマップ: `spotify.listening_by_hour`
-   - 月次Topアーティスト: `spotify.top_artists_monthly`
-3. ジャケット表示は `album_image_url` を「画像の URL」型に設定する。
+```sh
+cd worker
+pnpm install
+pnpm run typecheck && pnpm test
+```
+
+Dataform の compile: `npx @dataform/cli@3.0.46 compile .`
+
+## デプロイ
+
+- Worker: `main` に push すると `.github/workflows/deploy.yml` がデプロイする。secret は 1Password の `gh-deploy/spotify-play-history` から毎回すべて反映する
+- infra: `op run --env-file=infra/envs/prod/.env.op -- tofu -chdir=infra/envs/prod apply`。state は R2 の `chabatake-tfstate` の `spotify-play-history/chanuco/terraform.tfstate`
+- Dataform: `main` を毎時 compile して実行する。手で流すときは BigQuery の画面の Dataform から
+
+## 初めて動かすとき・取り直すとき
+
+### Spotify の refresh token
+
+Spotify for Developers の app の Redirect URIs に `http://127.0.0.1:8888/callback` を登録してから実行する。
+
+```sh
+SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... node worker/scripts/authorize.ts
+```
+
+出てきた token を 1Password の `gh-deploy/spotify-play-history` の `spotify_refresh_token` に入れ、deploy workflow を手で流す。Worker は secret が変わったことを見て、新しい token に切り替える。
+
+### Dataform の git の token
+
+GitHub の fine-grained PAT（この repo の Contents を読むだけ）を作り、Secret Manager に入れる。控えを 1Password の `gh-deploy/spotify-play-history` の `github_dataform_token` に置く。
+
+```sh
+gcloud secrets versions add spotify-play-history-dataform-git-token --project=chanuco --data-file=-
+```
+
+## Looker Studio
+
+BigQuery の `chanuco` に接続し、`spotify_mart` の表と view をデータソースにする。アルバムのジャケットは、`album_image_url` の型を「画像の URL」にすると表に出る。

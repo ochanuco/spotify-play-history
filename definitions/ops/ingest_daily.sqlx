@@ -1,0 +1,15 @@
+config {
+  type: "view",
+  schema: "spotify_ops",
+  name: "ingest_daily",
+  description: "JST の日ごとの実行回数と失敗回数"
+}
+
+select
+  date(started_at, "Asia/Tokyo") as run_date_jst,
+  count(*) as runs,
+  countif(status = "error") as failed_runs,
+  sum(fetched) as fetched_items,
+  array_agg(error ignore nulls order by started_at desc limit 1)[safe_offset(0)] as last_error
+from ${ref("spotify_ops", "runs")}
+group by run_date_jst

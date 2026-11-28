@@ -1,0 +1,15 @@
+config {
+  type: "table",
+  schema: "spotify_mart",
+  name: "daily_listening",
+  description: "JST の日ごとの再生数と時間"
+}
+
+select
+  date(played_at, "Asia/Tokyo") as played_date_jst,
+  count(*) as play_count,
+  round(sum(duration_ms) / 60000, 1) as minutes,
+  count(distinct track_uri) as distinct_tracks,
+  count(distinct primary_artist_id) as distinct_artists
+from ${ref("spotify_stg", "plays")}
+group by played_date_jst

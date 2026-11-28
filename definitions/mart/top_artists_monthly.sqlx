@@ -1,0 +1,25 @@
+config {
+  type: "table",
+  schema: "spotify_mart",
+  name: "top_artists_monthly",
+  description: "JST の月ごとのアーティスト別再生数と順位（1 曲目に名前が出るアーティストで数える）"
+}
+
+with monthly as (
+  select
+    date_trunc(date(played_at, "Asia/Tokyo"), month) as month_jst,
+    primary_artist_id as artist_id,
+    any_value(primary_artist_name) as artist_name,
+    count(*) as play_count
+  from ${ref("spotify_stg", "plays")}
+  where primary_artist_id is not null
+  group by month_jst, artist_id
+)
+
+select
+  month_jst,
+  artist_id,
+  artist_name,
+  play_count,
+  dense_rank() over (partition by month_jst order by play_count desc) as artist_rank
+from monthly

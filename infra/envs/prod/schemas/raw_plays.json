@@ -1,0 +1,7 @@
+[
+  {"name": "played_at", "type": "TIMESTAMP", "mode": "REQUIRED", "description": "Spotify の played_at（再生を終えた時刻）"},
+  {"name": "track_id", "type": "STRING", "mode": "NULLABLE", "description": "ローカルファイルの再生では null"},
+  {"name": "item", "type": "JSON", "mode": "REQUIRED", "description": "recently-played の item をそのまま"},
+  {"name": "fetched_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "run_id", "type": "STRING", "mode": "REQUIRED"}
+]

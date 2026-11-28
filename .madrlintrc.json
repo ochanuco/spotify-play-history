@@ -1,0 +1,14 @@
+{
+  "extends": ["madr-lint:recommended"],
+  "adrDir": "docs/adr",
+  "ignorePatterns": ["template.md"],
+  "rules": {
+    "madr/required-sections": [
+      "error",
+      {
+        "sections": ["要約", "背景と課題", "検討した選択肢", "決定", "結果"]
+      }
+    ],
+    "madr/no-numbering-gap": "error"
+  }
+}
