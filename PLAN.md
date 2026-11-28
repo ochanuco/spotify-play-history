@@ -52,12 +52,14 @@ BigQuery へは SA `spotify-play-history-ingest` の鍵で書く。Workers は W
 | `spotify_ops.runs` | 表（`started_at` で日分割） | 実行ごとの `status`（ok / error）、`after_played_at`、`fetched`、`error` |
 | `spotify_ops.ingest_daily` | view | 日ごとの実行回数・失敗回数・最後のエラー |
 | `spotify_stg.plays` | incremental | 1 再生 1 行。`(played_at, track_uri)` で重複を除き、曲・アーティスト・アルバム・コンテキストを列にする |
-| `spotify_mart.plays` | view | Looker Studio 向けの一覧。日時は JST |
+| `spotify_mart.plays` | view | Looker Studio 向けの一覧。日時は JST。聴いた時間（`listened_ms_estimate`）とスキップ（`skipped_estimate`）の推定を持つ |
 | `spotify_mart.daily_listening` | 表 | JST の日ごとの再生数・分数・曲数・アーティスト数 |
 | `spotify_mart.listening_by_hour` | view | 直近 90 日の曜日 × 時間帯 |
 | `spotify_mart.top_artists_monthly` | 表 | 月ごとのアーティスト別再生数と順位 |
 
 raw に item を丸ごと残すのは、取り直せないデータから後で別の列を作れるようにするため。列を足すときは stg の SQL を変えて、Dataform を full refresh で流し直す。
+
+聴いた時間とスキップの推定: recently-played はどれだけ聴いたかを返さない。`played_at` は再生を終えた時刻なので、続けて聴いている間は前の再生との間隔が聴いた時間になる。間隔が曲の長さの 9 割未満ならスキップとみなす。間隔が曲の長さを 1 割以上超えたときは間に休みがあったとみなし、どちらも null にする。すぐに飛ばした曲は recently-played に載らないことがあるので、スキップの数は少なめに出る。
 
 重複の除き方: ローカルファイルの再生は `track_id` が null なので、`track_uri` を使って見分ける。`stg.plays` の assertion（`spotify_ops` に作る）が、キーの重複と null を検査する。
 
