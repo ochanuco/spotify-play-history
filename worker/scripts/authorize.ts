@@ -1,6 +1,6 @@
 // 使い方: SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... node worker/scripts/authorize.ts
 // ブラウザで認可すると、user-read-recently-played の refresh token を標準出力に出す。
-// Spotify の app の Redirect URIs に http://127.0.0.1:8888/callback を登録しておく（localhost は受け付けられない）
+// Spotify の app の Redirect URIs に http://127.0.0.1:8888/callback を登録しておく
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 

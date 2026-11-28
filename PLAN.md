@@ -71,10 +71,11 @@ raw に item を丸ごと残すのは、取り直せないデータから後で�
 
 Worker は毎回、成否を Gatus の external endpoint `spotify_play-history` に push する。push の口は Cloudflare Access が service token を持つ Worker にだけ開けている。
 
+- push が 30 分届かないことも失敗として数える（Worker が動いていない、鍵や Access の token が切れたなど）
 - 失敗が 3 回続くと Discord に知らせる。直るまで 6 時間ごとに知らせ直し、直ったら知らせる
-- push が 30 分届かなければ失敗とみなす（Worker が動いていない、鍵や Access の token が切れたなど）
+- 止まっていても、取りこぼすのは 50 曲を超えて聴いてから。通知が届くまでの遅れは、その範囲に収まる
 
-エラーの中身は `spotify_ops.runs` と Gatus の画面、Worker のログで見る。
+エラーの中身は `spotify_ops.runs` と Gatus の画面、Worker のログで見る。Dataform の失敗は監視していない。raw は残るので、直してから流し直せば追いつく。
 
 ## 秘密
 

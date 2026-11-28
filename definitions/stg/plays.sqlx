@@ -18,7 +18,7 @@ config {
 with source as (
   select *
   from ${ref("spotify_raw", "plays")}
-  ${when(incremental(), `where fetched_at >= timestamp_sub((select max(fetched_at) from ${self()}), interval 1 hour)`)}
+  ${when(incremental(), `where fetched_at >= timestamp_sub((select coalesce(max(fetched_at), timestamp "1970-01-01") from ${self()}), interval 1 hour)`)}
 ),
 
 deduped as (
